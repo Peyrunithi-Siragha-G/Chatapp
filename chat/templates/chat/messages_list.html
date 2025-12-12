@@ -1,0 +1,10 @@
+{% for msg in messages %}
+    <div class="msg {% if msg.is_bot %}bot{% else %}user{% endif %}">
+        {% if msg.is_bot %}
+            <strong>AI:</strong><br>
+        {% else %}
+            <strong>{{ msg.user.username }}</strong><br>
+        {% endif %}
+        {{ msg.text|linebreaksbr }}
+    </div>
+{% endfor %}

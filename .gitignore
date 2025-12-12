@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+.venv/
+
+# IDE folders
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+
+# Django static & media
+media/
+staticfiles/
+
+# Chroma DB local persistent store
+chroma/
+chroma_storage/
+chroma_db/
+index/
+
+# Environment
+.env
+
+# Other
+*.sqlite3

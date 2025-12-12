@@ -1,0 +1,18 @@
+{% extends "chat/base.html" %}
+{% block title %}Your Chats{% endblock %}
+
+{% block content %}
+<h2>Your Conversations</h2>
+
+<ul>
+    {% for c in conversations %}
+        <li>
+            <a href="{% url 'conversation_detail' c.id %}">
+                {{ c.title }}
+            </a>
+        </li>
+    {% empty %}
+        <p>No conversations yet.</p>
+    {% endfor %}
+</ul>
+{% endblock %}
