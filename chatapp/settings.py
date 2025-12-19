@@ -25,7 +25,8 @@ SECRET_KEY = 'django-insecure-^v=y0s62g^+p509pa%$n#*pnp5iya3!j!#eq&ga$o3n*8al7*o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [".railway.app", "localhost", "127.0.0.1",]
+
 
 
 # Application definition
@@ -125,3 +126,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR / "media")
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "conversations_list"
 LOGOUT_REDIRECT_URL = "login"
+
+CSRF_TRUSTED_ORIGINS = ["https://*.railway.app",]
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
