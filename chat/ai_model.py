@@ -4,7 +4,8 @@ from huggingface_hub import InferenceClient
 HF_TOKEN = os.getenv("HF_API_KEY")
 
 client = InferenceClient(
-    token=HF_TOKEN
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    token=HF_TOKEN,
 )
 
 def generate_ai_reply(prompt):
@@ -16,7 +17,8 @@ def generate_ai_reply(prompt):
         )
         return response.choices[0].message["content"]
     except Exception as e:
-        return f"AI Error: {e}"
+        # IMPORTANT: never crash Django
+        return "⚠️ AI service is temporarily unavailable. Please try again later."
 
 def generate_ai_title(prompt):
     try:
@@ -27,4 +29,4 @@ def generate_ai_title(prompt):
         )
         return response.choices[0].message["content"]
     except Exception:
-        return "Untitled"
+        return "New Conversation"
