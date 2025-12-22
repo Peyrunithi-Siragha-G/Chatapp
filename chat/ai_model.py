@@ -4,6 +4,7 @@ import os
 client = InferenceClient(
     model="meta-llama/Llama-3.2-3B-Instruct",
     token=os.getenv("HF_API_KEY"),
+    base_url="https://router.huggingface.co"
 )
 
 def generate_ai_reply(prompt):
