@@ -29,12 +29,6 @@
         <button type="submit">Send</button>
     </form>
 
-    <form method="post" id="chat-form">
-    {% csrf_token %}
-    <textarea name="text" id="chat-input" required></textarea>
-    <button type="submit" id="send-btn">Send</button>
-    </form>
-
     <div class="upload-box">
         <h3>Upload Document</h3>
         <form method="POST" enctype="multipart/form-data">
