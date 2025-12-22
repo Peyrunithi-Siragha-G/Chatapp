@@ -88,20 +88,6 @@ def conversation_detail(request, conv_id=None):
         user=request.user
     ).order_by("-created_at")
 
-    from django.utils import timezone
-    from datetime import timedelta
-
-    last_message = (
-        Message.objects
-        .filter(conversation=conv, user=request.user, is_bot=False)
-        .order_by("-timestamp")
-        .first()
-    )
-
-    if last_message:
-        if last_message.text == text and last_message.timestamp > timezone.now() - timedelta(seconds=2):
-            return redirect("conversation_detail", conv_id=conv.id)
-
     # Create new conversation if none exists
     if conv_id is None:
         conv = Conversation.objects.create(
