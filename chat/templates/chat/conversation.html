@@ -29,6 +29,12 @@
         <button type="submit">Send</button>
     </form>
 
+    <form method="post" id="chat-form">
+    {% csrf_token %}
+    <textarea name="text" id="chat-input" required></textarea>
+    <button type="submit" id="send-btn">Send</button>
+    </form>
+
     <div class="upload-box">
         <h3>Upload Document</h3>
         <form method="POST" enctype="multipart/form-data">
@@ -53,4 +59,27 @@
     const box = document.getElementById("messages-box");
     if (box) box.scrollTop = box.scrollHeight;
 </script>
+<script>
+let sending = false;
+
+document.getElementById("chat-form").addEventListener("submit", function () {
+    if (sending) {
+        return false; // block second submit
+    }
+
+    sending = true;
+    document.getElementById("send-btn").disabled = true;
+});
+</script>
+<script>
+const textarea = document.getElementById("chat-input");
+
+textarea.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById("chat-form").requestSubmit();
+    }
+});
+</script>
+
 {% endblock %}
