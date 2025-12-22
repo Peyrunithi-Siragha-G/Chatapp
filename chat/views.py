@@ -178,6 +178,7 @@ Answer only using the document.
             doc.save()
 
             extracted_text = extract_text_from_file(doc.file.path)
+            print("EXTRACTED LENGTH:", len(extracted_text))
 
             if extracted_text.strip():
                 try:
@@ -186,6 +187,7 @@ Answer only using the document.
                     pass
 
         return redirect("conversation_detail", conv_id=conv.id)
+
 
     # -----------------------------
     # RENDER PAGE
