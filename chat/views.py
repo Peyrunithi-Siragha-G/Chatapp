@@ -136,15 +136,16 @@ def conversation_detail(request, conv_id=None):
             if relevant_chunks:
                 context = "\n\n".join(relevant_chunks)
                 prompt = f"""
-You are an assistant answering strictly from the document below.
+You are an assistant.
+
+Use the DOCUMENT CONTEXT below if it is relevant.
+If the question cannot be answered from the document, answer normally using your own knowledge.
 
 DOCUMENT:
 {context}
 
 QUESTION:
 {user_message}
-
-Answer only using the document.
 """
             else:
                 prompt = user_message
