@@ -1,18 +1,22 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse
 from django.http import JsonResponse
 from django.template.loader import render_to_string
-from .ai_model import generate_ai_reply, generate_ai_title
+
+from django.contrib.auth.models import User
+
 from .models import Conversation, Message, Document
 from .forms import SignUpForm, DocumentUploadForm
 
-from .chroma_manager import add_document
-text = extract_text_from_file(file_path)
-add_document(conversation.id, text)
+from .ai_model import generate_ai_reply, generate_ai_title
+from .analyzer import extract_text_from_file
+from .chroma_manager import add_document, query_document
 
-from .chroma_manager import query_document
+
+# -------------------------
+# AUTH VIEWS
+# -------------------------
 
 def login_view(request):
     if request.method == "POST":
@@ -20,7 +24,7 @@ def login_view(request):
         password = request.POST.get("password")
 
         user = authenticate(request, username=username, password=password)
-        if user is not None:
+        if user:
             login(request, user)
             return redirect("conversations_list")
 
@@ -36,14 +40,18 @@ def signup_view(request):
         password1 = request.POST.get("password1")
         password2 = request.POST.get("password2")
 
-        from django.contrib.auth.models import User
         if password1 != password2:
             return render(request, "chat/signup.html", {"error": "Passwords do not match"})
 
         if User.objects.filter(username=username).exists():
             return render(request, "chat/signup.html", {"error": "Username already exists"})
 
-        user = User.objects.create_user(username=username, email=email, password=password1)
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password1
+        )
+
         login(request, user)
         return redirect("conversations_list")
 
@@ -55,9 +63,16 @@ def logout_view(request):
     return redirect("login")
 
 
+# -------------------------
+# CHAT VIEWS
+# -------------------------
+
 @login_required
 def conversations_list(request):
-    conversations = Conversation.objects.filter(user=request.user).order_by("-created_at")
+    conversations = Conversation.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
+
     return render(request, "chat/conversations.html", {
         "all_conversations": conversations,
         "conversation": None,
@@ -66,55 +81,65 @@ def conversations_list(request):
 
 @login_required
 def conversation_detail(request, conv_id=None):
-    all_conversations = Conversation.objects.filter(user=request.user).order_by("-created_at")
+    all_conversations = Conversation.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
 
+    # Create new conversation
     if conv_id is None:
-        conv = Conversation.objects.create(user=request.user, title="New Chat")
+        conv = Conversation.objects.create(
+            user=request.user,
+            title="New Chat"
+        )
         return redirect("conversation_detail", conv_id=conv.id)
 
-    conv = get_object_or_404(Conversation, pk=conv_id, user=request.user)
+    conv = get_object_or_404(
+        Conversation,
+        id=conv_id,
+        user=request.user
+    )
 
-    # User message
+    # -------------------------
+    # HANDLE USER MESSAGE
+    # -------------------------
     if request.method == "POST" and "text" in request.POST:
-        text = request.POST.get("text")
+        user_message = request.POST.get("text", "").strip()
 
-        if text:
+        if user_message:
+            # Save user message
             Message.objects.create(
                 conversation=conv,
                 user=request.user,
-                text=text,
+                text=user_message,
                 is_bot=False
             )
 
+            # Auto-generate title
             if conv.title == "New Chat":
-                conv.title = generate_ai_title(text)
+                conv.title = generate_ai_title(user_message)
                 conv.save()
 
-            # Chroma search
-            from .chroma_manager import search_relevant_text
-            context = search_relevant_text(text)
+            # 🔍 Query Chroma for document context
+            relevant_chunks = query_document(conv.id, user_message)
 
-            full_prompt = f"Relevant document info:\n{context}\n\nUser question: {text}"
-            relevant_chunks = query_document(conversation.id, user_message)
-
-            context = "\n\n".join(relevant_chunks)
-
-            prompt = f"""
-            You are an assistant answering questions strictly from the document context below.
-
-            DOCUMENT CONTEXT:
-            {context}
-
-            QUESTION:
-            {user_message}
-
-            Answer based only on the document.
-            """
-
-            ai_response = generate_ai_reply(prompt)
             if not relevant_chunks:
                 ai_response = "No relevant information found in the uploaded document."
+            else:
+                context = "\n\n".join(relevant_chunks)
+                prompt = f"""
+You are an assistant answering questions strictly from the document context below.
 
+DOCUMENT CONTEXT:
+{context}
+
+QUESTION:
+{user_message}
+
+Answer based only on the document.
+"""
+                ai_response = generate_ai_reply(prompt)
+
+            # Save AI message
             Message.objects.create(
                 conversation=conv,
                 user=request.user,
@@ -124,7 +149,9 @@ def conversation_detail(request, conv_id=None):
 
         return redirect("conversation_detail", conv_id=conv.id)
 
-    # Upload document
+    # -------------------------
+    # HANDLE DOCUMENT UPLOAD
+    # -------------------------
     if request.method == "POST" and "file" in request.FILES:
         upload_form = DocumentUploadForm(request.POST, request.FILES)
 
@@ -134,12 +161,10 @@ def conversation_detail(request, conv_id=None):
             doc.conversation = conv
             doc.save()
 
-            from .analyzer import extract_text_from_file
-            from .chroma_manager import add_document_to_chroma
-
-            extracted = extract_text_from_file(doc.file.path)
-            if extracted.strip():
-                add_document_to_chroma(doc.id, extracted)
+            extracted_text = extract_text_from_file(doc.file.path)
+            if extracted_text.strip():
+                # 🧠 Store document in Chroma under this conversation
+                add_document(conv.id, extracted_text)
 
         return redirect("conversation_detail", conv_id=conv.id)
 
@@ -156,8 +181,23 @@ def conversation_detail(request, conv_id=None):
     })
 
 
+# -------------------------
+# AJAX PARTIAL
+# -------------------------
+
+@login_required
 def messages_partial(request, conv_id):
-    conv = get_object_or_404(Conversation, pk=conv_id)
+    conv = get_object_or_404(
+        Conversation,
+        id=conv_id,
+        user=request.user
+    )
+
     messages = conv.messages.order_by("timestamp")
-    html = render_to_string("chat/messages_list.html", {"messages": messages})
+    html = render_to_string(
+        "chat/messages_list.html",
+        {"messages": messages},
+        request=request
+    )
+
     return JsonResponse({"html": html})
