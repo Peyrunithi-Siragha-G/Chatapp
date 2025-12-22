@@ -1,15 +1,31 @@
-import os
 from huggingface_hub import InferenceClient
-
-HF_TOKEN = os.getenv("HF_API_KEY")
+import os
 
 client = InferenceClient(
     model="meta-llama/Llama-3.2-3B-Instruct",
-    token=HF_TOKEN,
+    token=os.getenv("HF_API_KEY"),
 )
 
 def generate_ai_reply(prompt):
-    return "AI temporarily disabled. Backend is working."
+    response = client.chat.completions.create(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=256,
+    )
+    return response.choices[0].message["content"]
+
 
 def generate_ai_title(prompt):
-    return "New Conversation"
+    response = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Generate a very short, clear title (max 6 words) "
+                    "for the following conversation:\n\n"
+                    f"{prompt}"
+                ),
+            }
+        ],
+        max_tokens=20,
+    )
+    return response.choices[0].message["content"]
