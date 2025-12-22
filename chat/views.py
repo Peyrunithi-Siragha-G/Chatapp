@@ -4,11 +4,15 @@ from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 from django.http import JsonResponse
 from django.template.loader import render_to_string
-
 from .ai_model import generate_ai_reply, generate_ai_title
 from .models import Conversation, Message, Document
 from .forms import SignUpForm, DocumentUploadForm
 
+from .chroma_manager import add_document
+text = extract_text_from_file(file_path)
+add_document(conversation.id, text)
+
+from .chroma_manager import query_document
 
 def login_view(request):
     if request.method == "POST":
@@ -91,7 +95,25 @@ def conversation_detail(request, conv_id=None):
             context = search_relevant_text(text)
 
             full_prompt = f"Relevant document info:\n{context}\n\nUser question: {text}"
-            ai_response = generate_ai_reply(full_prompt)
+            relevant_chunks = query_document(conversation.id, user_message)
+
+            context = "\n\n".join(relevant_chunks)
+
+            prompt = f"""
+            You are an assistant answering questions strictly from the document context below.
+
+            DOCUMENT CONTEXT:
+            {context}
+
+            QUESTION:
+            {user_message}
+
+            Answer based only on the document.
+            """
+
+            ai_response = generate_ai_reply(prompt)
+            if not relevant_chunks:
+                ai_response = "No relevant information found in the uploaded document."
 
             Message.objects.create(
                 conversation=conv,

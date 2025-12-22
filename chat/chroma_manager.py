@@ -1,53 +1,53 @@
-# chat/chroma_manager.py
-import os
-import logging
+import chromadb
+from chromadb.config import Settings
+from sentence_transformers import SentenceTransformer
 
-logger = logging.getLogger(__name__)
+# Load embedding model once
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-USE_CHROMA = os.getenv("USE_CHROMA", "0") == "1"
+client = chromadb.Client(
+    Settings(persist_directory="chroma_db", anonymized_telemetry=False)
+)
 
-if USE_CHROMA:
-    try:
-        import chromadb
-        CHROMA_PATH = os.getenv("CHROMA_PATH", "/tmp/chroma")
-        chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-        collection = chroma_client.get_or_create_collection(name="documents")
-    except Exception as e:
-        logger.exception("Failed to init Chroma: %s", e)
-        USE_CHROMA = False
-        collection = None
-else:
-    collection = None
+def get_collection(conversation_id):
+    return client.get_or_create_collection(
+        name=f"conversation_{conversation_id}"
+    )
 
+def add_document(conversation_id, text):
+    collection = get_collection(conversation_id)
 
-def add_document_to_chroma(doc_id, text):
-    if not USE_CHROMA or collection is None:
-        logger.info("Chroma disabled — not adding embeddings.")
-        return False
-    try:
-        # make sure text is non-empty
-        if not text or not text.strip():
-            return False
-        collection.add(ids=[str(doc_id)], documents=[text])
-        return True
-    except Exception as e:
-        logger.exception("Chroma add failed: %s", e)
-        return False
+    chunks = split_text(text)
 
+    embeddings = embedding_model.encode(chunks).tolist()
 
-def search_relevant_text(query, top_k=3):
-    """
-    If Chroma enabled: run query, return concatenated documents.
-    Otherwise: return empty string (caller should fallback to returning full doc text).
-    """
-    if not USE_CHROMA or collection is None:
-        return ""
-    try:
-        results = collection.query(query_texts=[query], n_results=top_k)
-        docs = results.get("documents", [])
-        if docs and len(docs) > 0:
-            # docs is list-of-lists
-            return "\n\n".join(docs[0])
-    except Exception as e:
-        logger.exception("Chroma query failed: %s", e)
-    return ""
+    collection.add(
+        documents=chunks,
+        embeddings=embeddings,
+        ids=[f"{conversation_id}_{i}" for i in range(len(chunks))]
+    )
+
+def query_document(conversation_id, query, top_k=3):
+    collection = get_collection(conversation_id)
+
+    query_embedding = embedding_model.encode([query]).tolist()
+
+    results = collection.query(
+        query_embeddings=query_embedding,
+        n_results=top_k
+    )
+
+    return results["documents"][0] if results["documents"] else []
+
+def split_text(text, chunk_size=500, overlap=50):
+    words = text.split()
+    chunks = []
+    start = 0
+
+    while start < len(words):
+        end = start + chunk_size
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        start += chunk_size - overlap
+
+    return chunks
