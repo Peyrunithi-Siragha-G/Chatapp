@@ -11,7 +11,7 @@ from .forms import SignUpForm, DocumentUploadForm
 
 from .ai_model import generate_ai_reply, generate_ai_title
 from .analyzer import extract_text_from_file
-from .chroma_manager import add_document, query_document
+from .chroma_manager import add_document_to_chroma, query_document
 
 
 # -------------------------
