@@ -81,11 +81,14 @@ def conversations_list(request):
 
 @login_required
 def conversation_detail(request, conv_id=None):
+    from .chroma_manager import query_document, add_document_to_chroma
+    from .analyzer import extract_text_from_file
+
     all_conversations = Conversation.objects.filter(
         user=request.user
     ).order_by("-created_at")
 
-    # Create new conversation
+    # Create new conversation if none exists
     if conv_id is None:
         conv = Conversation.objects.create(
             user=request.user,
@@ -99,9 +102,9 @@ def conversation_detail(request, conv_id=None):
         user=request.user
     )
 
-    # -------------------------
-    # HANDLE USER MESSAGE
-    # -------------------------
+    # -----------------------------
+    # USER MESSAGE (CHAT)
+    # -----------------------------
     if request.method == "POST" and "text" in request.POST:
         user_message = request.POST.get("text", "").strip()
 
@@ -114,32 +117,45 @@ def conversation_detail(request, conv_id=None):
                 is_bot=False
             )
 
-            # Auto-generate title
+            # Generate title only once
             if conv.title == "New Chat":
-                conv.title = generate_ai_title(user_message)
-                conv.save()
+                try:
+                    conv.title = generate_ai_title(user_message)
+                    conv.save()
+                except Exception:
+                    pass
 
-            # 🔍 Query Chroma for document context
-            relevant_chunks = query_document(conv.id, user_message)
+            # ---- RAG SEARCH ----
+            relevant_chunks = []
+            try:
+                relevant_chunks = query_document(conv.id, user_message)
+            except Exception:
+                relevant_chunks = []
 
-            if not relevant_chunks:
-                ai_response = "No relevant information found in the uploaded document."
-            else:
+            # Build prompt
+            if relevant_chunks:
                 context = "\n\n".join(relevant_chunks)
                 prompt = f"""
-You are an assistant answering questions strictly from the document context below.
+You are an assistant answering strictly from the document below.
 
-DOCUMENT CONTEXT:
+DOCUMENT:
 {context}
 
 QUESTION:
 {user_message}
 
-Answer based only on the document.
+Answer only using the document.
 """
-                ai_response = generate_ai_reply(prompt)
+            else:
+                prompt = user_message
 
-            # Save AI message
+            # Generate AI response
+            try:
+                ai_response = generate_ai_reply(prompt)
+            except Exception:
+                ai_response = "AI is temporarily unavailable."
+
+            # Save bot message
             Message.objects.create(
                 conversation=conv,
                 user=request.user,
@@ -149,9 +165,9 @@ Answer based only on the document.
 
         return redirect("conversation_detail", conv_id=conv.id)
 
-    # -------------------------
-    # HANDLE DOCUMENT UPLOAD
-    # -------------------------
+    # -----------------------------
+    # DOCUMENT UPLOAD
+    # -----------------------------
     if request.method == "POST" and "file" in request.FILES:
         upload_form = DocumentUploadForm(request.POST, request.FILES)
 
@@ -162,23 +178,33 @@ Answer based only on the document.
             doc.save()
 
             extracted_text = extract_text_from_file(doc.file.path)
+
             if extracted_text.strip():
-                # 🧠 Store document in Chroma under this conversation
-                add_document(conv.id, extracted_text)
+                try:
+                    add_document_to_chroma(conv.id, extracted_text)
+                except Exception:
+                    pass
 
         return redirect("conversation_detail", conv_id=conv.id)
 
-    upload_form = DocumentUploadForm()
+    # -----------------------------
+    # RENDER PAGE
+    # -----------------------------
     messages = conv.messages.order_by("timestamp")
     documents = conv.documents.order_by("-uploaded_at")
+    upload_form = DocumentUploadForm()
 
-    return render(request, "chat/conversation.html", {
-        "conversation": conv,
-        "messages": messages,
-        "upload_form": upload_form,
-        "documents": documents,
-        "all_conversations": all_conversations,
-    })
+    return render(
+        request,
+        "chat/conversation.html",
+        {
+            "conversation": conv,
+            "messages": messages,
+            "documents": documents,
+            "upload_form": upload_form,
+            "all_conversations": all_conversations,
+        },
+    )
 
 
 # -------------------------
