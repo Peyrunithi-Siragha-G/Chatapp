@@ -3,15 +3,77 @@
 
 {% block extra_head %}
 <style>
-.chat-container { max-width:900px; margin:0 auto; }
-.messages { background:#fff; border-radius:10px; padding:20px; height:65vh; overflow:auto; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
-.msg { margin-bottom:14px; padding:12px 16px; border-radius:10px; max-width:80%; white-space:pre-wrap; }
-.msg.user { background:#dff3ff; margin-left:auto; text-align:right; }
-.msg.bot { background:#efefef; margin-right:auto; text-align:left; }
-.input-row { display:flex; gap:8px; margin-top:12px; }
-.input-row input[type="text"] { flex:1; padding:10px; border-radius:8px; border:1px solid #ccc; }
-.input-row button { padding:10px 14px; border-radius:8px; background:#10a37f; color:white; border:none; cursor:pointer; }
-.upload-box { margin-top:18px; background:#fff; padding:14px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+.chat-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.messages {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    height: 65vh;
+    overflow-y: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.msg {
+    margin-bottom: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    max-width: 80%;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.msg.user {
+    background: #dff3ff;
+    margin-left: auto;
+    text-align: right;
+}
+
+.msg.bot {
+    background: #efefef;
+    margin-right: auto;
+    text-align: left;
+}
+
+.input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.input-row textarea {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    resize: none;
+    font-family: inherit;
+}
+
+.input-row button {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #10a37f;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.input-row button:disabled {
+    background: #9ecfc1;
+    cursor: not-allowed;
+}
+
+.upload-box {
+    margin-top: 18px;
+    background: #fff;
+    padding: 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
 </style>
 {% endblock %}
 
@@ -19,16 +81,25 @@
 <div class="chat-container">
     <h2>{{ conversation.title }}</h2>
 
+    <!-- Messages -->
     <div class="messages" id="messages-box">
         {% include "chat/messages_list.html" %}
     </div>
 
-    <form method="POST" class="input-row" style="margin-top:12px;">
+    <!-- Chat form -->
+    <form method="POST" id="chat-form" class="input-row">
         {% csrf_token %}
-        <input type="text" name="text" placeholder="Type a message..." required>
-        <button type="submit">Send</button>
+        <textarea
+            name="text"
+            id="chat-input"
+            rows="1"
+            placeholder="Type a message..."
+            required
+        ></textarea>
+        <button type="submit" id="send-btn">Send</button>
     </form>
 
+    <!-- Upload document -->
     <div class="upload-box">
         <h3>Upload Document</h3>
         <form method="POST" enctype="multipart/form-data">
@@ -40,7 +111,11 @@
         <h4 style="margin-top:12px;">Uploaded Files:</h4>
         <ul>
             {% for doc in documents %}
-                <li><a href="{{ doc.file.url }}" target="_blank">{{ doc.title|default:doc.file.name }}</a></li>
+                <li>
+                    <a href="{{ doc.file.url }}" target="_blank">
+                        {{ doc.title|default:doc.file.name }}
+                    </a>
+                </li>
             {% empty %}
                 <li>No documents uploaded</li>
             {% endfor %}
@@ -48,32 +123,38 @@
     </div>
 </div>
 
+<!-- Auto-scroll -->
 <script>
-    // auto-scroll
-    const box = document.getElementById("messages-box");
-    if (box) box.scrollTop = box.scrollHeight;
+const box = document.getElementById("messages-box");
+if (box) {
+    box.scrollTop = box.scrollHeight;
+}
 </script>
+
+<!-- Prevent double submit + Enter handling -->
 <script>
 let sending = false;
 
-document.getElementById("chat-form").addEventListener("submit", function () {
+const form = document.getElementById("chat-form");
+const input = document.getElementById("chat-input");
+const button = document.getElementById("send-btn");
+
+// Prevent double submit
+form.addEventListener("submit", function (e) {
     if (sending) {
-        return false; // block second submit
+        e.preventDefault();
+        return;
     }
-
     sending = true;
-    document.getElementById("send-btn").disabled = true;
+    button.disabled = true;
 });
-</script>
-<script>
-const textarea = document.getElementById("chat-input");
 
-textarea.addEventListener("keydown", function (e) {
+// Enter = send, Shift+Enter = newline
+input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        document.getElementById("chat-form").requestSubmit();
+        form.requestSubmit();
     }
 });
 </script>
-
 {% endblock %}
